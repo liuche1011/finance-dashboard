@@ -273,7 +273,7 @@ export default function App() {
                       <td style={{padding:"6px 4px"}}>{t.category}</td>
                       <td style={{padding:"6px 4px"}}>{t.desc}</td>
                       <td style={{padding:"6px 4px",fontWeight:500,color:t.type==="income"?"#1D9E75":"#D85A30"}}>{t.type==="income"?"+":"-"}{fmt(t.amount)}</td>
-                      <td><button style={{...s.btn,padding:"2px 8px",fontSize:12}} onClick={()=>setTxs(txs.filter(x=>x.id!==t.id))}>刪除</button></td>
+                      <td><button style={{...s.btn,padding:"2px 8px",fontSize:12}} onClick={async()=>{ await supabase.from('transactions').delete().eq('id',t.id); setTxs(txs.filter(x=>x.id!==t.id)); }}>刪除</button></td>
                     </tr>
                   ))}
                 </tbody>
@@ -299,7 +299,7 @@ export default function App() {
                 <div key={g.id} style={s.card}>
                   <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
                     <span style={{fontWeight:500}}>{g.name}</span>
-                    <button style={{...s.btn,padding:"2px 8px",fontSize:12}} onClick={()=>setGoals(goals.filter(x=>x.id!==g.id))}>刪除</button>
+                    <button style={{...s.btn,padding:"2px 8px",fontSize:12}} onClick={async()=>{ await supabase.from('goals').delete().eq('id',g.id); setGoals(goals.filter(x=>x.id!==g.id)); }}>刪除</button>
                   </div>
                   <div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:"#6b7280",marginBottom:8}}>
                     <span>已存：{fmt(g.saved)}</span>
@@ -315,7 +315,7 @@ export default function App() {
                     <button style={s.btn} onClick={()=>{
                       const el = document.getElementById(`add-${g.id}`);
                       const v = parseFloat(el.value)||0;
-                      setGoals(goals.map(x=>x.id===g.id?{...x,saved:x.saved+v}:x));
+                      const newSaved = g.saved + v; await supabase.from('goals').update({ saved: newSaved }).eq('id', g.id); setGoals(goals.map(x=>x.id===g.id?{...x,saved:newSaved}:x));
                       el.value="";
                     }}>追加存款</button>
                   </div>
@@ -349,7 +349,7 @@ export default function App() {
                       <span style={{fontWeight:500}}>{d.name}</span>
                       {i===0 && <span style={{fontSize:11,padding:"2px 8px",borderRadius:12,background:"#eff6ff",color:"#1d4ed8",marginLeft:8}}>優先還款</span>}
                     </div>
-                    <button style={{...s.btn,padding:"2px 8px",fontSize:12}} onClick={()=>setDebts(debts.filter(x=>x.id!==d.id))}>刪除</button>
+                    <button style={{...s.btn,padding:"2px 8px",fontSize:12}} onClick={async()=>{ await supabase.from('debts').delete().eq('id',d.id); setDebts(debts.filter(x=>x.id!==d.id)); }}>刪除</button>
                   </div>
                   <div style={{display:"flex",gap:16,fontSize:13,color:"#6b7280",marginBottom:8,flexWrap:"wrap"}}>
                     <span>餘額：<strong style={{color:"#111"}}>{fmt(d.balance)}</strong></span>
