@@ -1,5 +1,11 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const supabase = createClient(
+  "https://isfalwpheehhuzpqhmjw.supabase.co",
+  "sb_publishable_hphOtmKSy5cJIXvITDpQYw_sSlZYtG-"
+);
 
 const COLORS = ["#378ADD","#1D9E75","#EF9F27","#D4537E","#7F77DD","#639922","#D85A30","#888780"];
 
@@ -32,10 +38,27 @@ const months = ["一月","二月","三月","四月","五月","六月","七月","
 
 export default function App() {
   const [tab, setTab] = useState("總覽");
-  const [txs, setTxs] = useState(initialTx);
-  const [debts, setDebts] = useState(initialDebts);
-  const [goals, setGoals] = useState(initialGoals);
+  const [txs, setTxs] = useState([]);
+  const [debts, setDebts] = useState([]);
+  const [goals, setGoals] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [newTx, setNewTx] = useState({ date: new Date().toISOString().slice(0,10), type:"expense", category:"餐飲", desc:"", amount:"" });
+
+  useEffect(() => {
+    async function loadData() {
+      setLoading(true);
+      const [t, d, g] = await Promise.all([
+        supabase.from("transactions").select("*").order("date", { ascending: false }),
+        supabase.from("debts").select("*").order("created_at"),
+        supabase.from("goals").select("*").order("created_at"),
+      ]);
+      if (t.data) setTxs(t.data.map(r => ({ ...r, desc: r.description })));
+      if (d.data) setDebts(d.data.map(r => ({ ...r, minPay: r.min_pay, rate: Number(r.rate) })));
+      if (g.data) setGoals(g.data);
+      setLoading(false);
+    }
+    loadData();
+  }, []);
   const [newDebt, setNewDebt] = useState({ name:"", balance:"", rate:"", minPay:"" });
   const [newGoal, setNewGoal] = useState({ name:"", target:"", saved:"" });
   const [debtMethod, setDebtMethod] = useState("avalanche");
@@ -87,21 +110,24 @@ export default function App() {
     return months;
   }
 
-  function addTx() {
+  async function addTx() {
     if(!newTx.desc||!newTx.amount) return;
-    setTxs([...txs, { ...newTx, id: Date.now(), amount: parseFloat(newTx.amount) }]);
+    const { data } = await supabase.from("transactions").insert([{ date: newTx.date, type: newTx.type, category: newTx.category, description: newTx.desc, amount: parseFloat(newTx.amount) }]).select();
+    if (data) setTxs([...data.map(r=>({...r,desc:r.description})), ...txs]);
     setNewTx({ date: new Date().toISOString().slice(0,10), type:"expense", category:"餐飲", desc:"", amount:"" });
   }
 
-  function addDebt() {
+  async function addDebt() {
     if(!newDebt.name||!newDebt.balance) return;
-    setDebts([...debts, { ...newDebt, id: Date.now(), balance:parseFloat(newDebt.balance), rate:parseFloat(newDebt.rate)||0, minPay:parseFloat(newDebt.minPay)||0 }]);
+    const { data } = await supabase.from("debts").insert([{ name: newDebt.name, balance: parseFloat(newDebt.balance), rate: parseFloat(newDebt.rate)||0, min_pay: parseFloat(newDebt.minPay)||0 }]).select();
+    if (data) setDebts([...debts, ...data.map(r=>({...r,minPay:r.min_pay}))]);
     setNewDebt({ name:"", balance:"", rate:"", minPay:"" });
   }
 
-  function addGoal() {
+  async function addGoal() {
     if(!newGoal.name||!newGoal.target) return;
-    setGoals([...goals, { ...newGoal, id: Date.now(), target:parseFloat(newGoal.target), saved:parseFloat(newGoal.saved)||0 }]);
+    const { data } = await supabase.from("goals").insert([{ name: newGoal.name, target: parseFloat(newGoal.target), saved: parseFloat(newGoal.saved)||0 }]).select();
+    if (data) setGoals([...goals, ...data]);
     setNewGoal({ name:"", target:"", saved:"" });
   }
 
