@@ -22,7 +22,6 @@ export default function App() {
   const [newGoal, setNewGoal] = useState({ name:'', target:'', saved:'' });
   const [debtMethod, setDebtMethod] = useState('avalanche');
   const [extraPay, setExtraPay] = useState(5000);
-  const [aiLoading, setAiLoading] = useState(false);
   const [aiAdvice, setAiAdvice] = useState('');
   const [showAiModal, setShowAiModal] = useState(false);
 
@@ -133,25 +132,52 @@ export default function App() {
     setGoals(goals.map(x=>x.id===g.id?{...x,saved:newSaved}:x));
   }
 
-  async function getAiAdvice() {
-    setAiLoading(true);
+  function getAdvice() {
     setShowAiModal(true);
-    setAiAdvice('');
-    const summary = `本月收入:${fmt(income)} 本月支出:${fmt(expense)} 本月結餘:${fmt(income-expense)} 總負債:${fmt(totalDebt)} 負債:${debts.map(d=>`${d.name}餘額${fmt(d.balance)}年利率${d.rate}%`).join('、')} 目標:${goals.map(g=>`${g.name}目標${fmt(g.target)}已存${fmt(g.saved)}`).join('、')}`;
-    try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({
-          model:'claude-sonnet-4-20250514', max_tokens:1000,
-          system:'你是一位專業的台灣個人財務顧問，請用繁體中文給出具體、實用、友善的財務建議。格式：先給整體評估（2句），再列出3個具體行動建議（每項50字以內），最後給一句鼓勵。',
-          messages:[{ role:'user', content:`請根據我的財務狀況給建議：\n${summary}` }]
-        })
-      });
-      const data = await res.json();
-      setAiAdvice(data.content?.[0]?.text || '無法取得建議，請稍後再試。');
-    } catch(e) { setAiAdvice('連線失敗，請稍後再試。'); }
-    setAiLoading(false);
+    const tips = [];
+    const ratio = expense / (income || 1);
+    const highRateDebt = [...debts].sort((a,b)=>b.rate-a.rate)[0];
+    const unfinishedGoals = goals.filter(g=>Number(g.saved)<Number(g.target));
+
+    if (income === 0) {
+      tips.push('⚠️ 本月尚未記錄收入，請記得新增薪資或其他收入。');
+    } else if (ratio > 0.9) {
+      tips.push('⚠️ 本月支出佔收入 ' + Math.round(ratio*100) + '%，支出偏高，建議檢視非必要消費，目標控制在 80% 以內。');
+    } else if (ratio > 0.7) {
+      tips.push('✅ 本月支出佔收入 ' + Math.round(ratio*100) + '%，財務狀況尚可，建議將結餘優先用於還債或儲蓄。');
+    } else {
+      tips.push('🎉 本月支出佔收入 ' + Math.round(ratio*100) + '%，儲蓄率良好！繼續保持這個節奏。');
+    }
+
+    if (highRateDebt) {
+      if (highRateDebt.rate >= 15) {
+        tips.push('💳「' + highRateDebt.name + '」年利率高達 ' + highRateDebt.rate + '%，建議優先加速還款，每多還一元都能大幅減少利息支出。');
+      } else if (highRateDebt.rate >= 5) {
+        tips.push('📋「' + highRateDebt.name + '」年利率 ' + highRateDebt.rate + '%，建議按雪崩法規劃還款，有餘裕時增加還款金額。');
+      }
+    }
+
+    if (totalDebt > income * 12) {
+      tips.push('📌 總負債 ' + fmt(totalDebt) + ' 超過年收入，建議制定長期還款計畫，避免再增加新負債。');
+    }
+
+    if (unfinishedGoals.length > 0) {
+      const g = unfinishedGoals[0];
+      const pct = Math.round((Number(g.saved)/Number(g.target))*100);
+      tips.push('🎯 儲蓄目標「' + g.name + '」目前達成 ' + pct + '%，距離目標還差 ' + fmt(Number(g.target)-Number(g.saved)) + '，建議每月固定撥出一筆金額專款專用。');
+    }
+
+    const topCat = [...catData].sort((a,b)=>b.value-a.value)[0];
+    if (topCat && income > 0 && topCat.value > income * 0.3) {
+      tips.push('🔍 本月「' + topCat.name + '」支出 ' + fmt(topCat.value) + '，佔收入 ' + Math.round(topCat.value/income*100) + '%，是最大支出項目，可評估是否有節省空間。');
+    }
+
+    if (tips.length === 1) {
+      tips.push('✅ 整體財務狀況良好，繼續維持現有的收支習慣！');
+    }
+
+    tips.push('💪 財務自由不是一蹴可幾，每一筆記錄都是進步的一步，加油！');
+    setAiAdvice(tips.join('\n\n'));
   }
 
   const s = {
@@ -369,8 +395,8 @@ export default function App() {
 
         {tab==='AI財務建議' && (
           <div style={s.card}>
-            <div style={s.sec}>AI 個人化財務建議</div>
-            <p style={{fontSize:13,color:'#6b7280',marginBottom:16}}>根據你目前的收支、負債與儲蓄目標，AI 將為你提供個人化建議。</p>
+            <div style={s.sec}>財務建議</div>
+            <p style={{fontSize:13,color:'#6b7280',marginBottom:16}}>根據你目前的收支、負債與儲蓄目標，自動產生個人化財務建議。</p>
             <div style={{...s.row,marginBottom:16}}>
               {[['本月結餘',fmt(income-expense)],['負債總額',fmt(totalDebt)],['儲蓄目標',goals.length+'個']].map(([l,v])=>(
                 <div key={l} style={s.metric}>
@@ -379,8 +405,8 @@ export default function App() {
                 </div>
               ))}
             </div>
-            <button style={{...s.btn,background:'#eff6ff',color:'#1d4ed8',padding:'10px 20px',fontSize:14}} onClick={getAiAdvice}>
-              取得 AI 財務建議
+            <button style={{...s.btn,background:'#eff6ff',color:'#1d4ed8',padding:'10px 20px',fontSize:14}} onClick={getAdvice}>
+              產生財務建議
             </button>
           </div>
         )}
@@ -390,14 +416,10 @@ export default function App() {
         <div style={s.overlay} onClick={()=>setShowAiModal(false)}>
           <div style={s.modal} onClick={e=>e.stopPropagation()}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
-              <span style={{fontSize:16,fontWeight:500}}>AI 財務建議</span>
+              <span style={{fontSize:16,fontWeight:500}}>財務建議</span>
               <button style={{...s.btn,padding:'4px 10px'}} onClick={()=>setShowAiModal(false)}>關閉</button>
             </div>
-            {aiLoading ? (
-              <div style={{color:'#6b7280',fontSize:14,padding:'2rem 0',textAlign:'center'}}>正在分析你的財務狀況...</div>
-            ) : (
-              <div style={{fontSize:14,lineHeight:1.8,whiteSpace:'pre-wrap'}}>{aiAdvice}</div>
-            )}
+            <div style={{fontSize:14,lineHeight:1.8,whiteSpace:'pre-wrap'}}>{aiAdvice}</div>
           </div>
         </div>
       )}
